@@ -198,7 +198,14 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 		return err
 	}
 
-	defer mate.Close()
+	mateClosed := false
+	defer func() {
+		if !mateClosed {
+			if closeErr := mate.Close(); closeErr != nil {
+				log.Printf("failed to close scraper for job %s: %v", job.ID, closeErr)
+			}
+		}
+	}()
 
 	var coords string
 	if job.Data.Lat != "" && job.Data.Lon != "" {
@@ -274,6 +281,7 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 		err = mate.Start(mateCtx, seedJobs...)
 		if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
 			cancel()
+			job.Status = web.StatusFailed
 
 			err2 := w.svc.Update(ctx, job)
 			if err2 != nil {
@@ -284,6 +292,39 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 		}
 
 		cancel()
+	}
+
+	if closeErr := mate.Close(); closeErr != nil {
+		job.Status = web.StatusFailed
+		if updateErr := w.svc.Update(ctx, job); updateErr != nil {
+			log.Printf("failed to update job status after close error: %v", updateErr)
+		}
+		return fmt.Errorf("close scraper: %w", closeErr)
+	}
+	mateClosed = true
+
+	if err := outfile.Sync(); err != nil {
+		job.Status = web.StatusFailed
+		if updateErr := w.svc.Update(ctx, job); updateErr != nil {
+			log.Printf("failed to update job status after output sync error: %v", updateErr)
+		}
+		return fmt.Errorf("sync CSV output: %w", err)
+	}
+
+	info, err := outfile.Stat()
+	if err != nil {
+		job.Status = web.StatusFailed
+		if updateErr := w.svc.Update(ctx, job); updateErr != nil {
+			log.Printf("failed to update job status after output stat error: %v", updateErr)
+		}
+		return fmt.Errorf("inspect CSV output: %w", err)
+	}
+	if info.Size() == 0 {
+		job.Status = web.StatusFailed
+		if updateErr := w.svc.Update(ctx, job); updateErr != nil {
+			log.Printf("failed to update job status after empty output: %v", updateErr)
+		}
+		return fmt.Errorf("scraping completed without any results from %d search locations; check the city, coordinates, and keywords", len(locations))
 	}
 
 	job.Status = web.StatusOK
