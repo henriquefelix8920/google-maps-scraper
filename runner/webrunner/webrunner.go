@@ -151,6 +151,25 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 		return w.svc.Update(ctx, job)
 	}
 
+	if strings.TrimSpace(job.Data.City) != "" {
+		if len(job.Data.Locations) > 0 {
+			job.Status = web.StatusFailed
+			_ = w.svc.Update(ctx, job)
+			return fmt.Errorf("use either automatic city coverage or manual additional coordinates, not both")
+		}
+
+		center, points, resolveErr := resolveCityPoints(ctx, job.Data.City, job.Data.Coverage)
+		if resolveErr != nil {
+			job.Status = web.StatusFailed
+			_ = w.svc.Update(ctx, job)
+			return resolveErr
+		}
+
+		parts := strings.Split(center, ",")
+		job.Data.Lat, job.Data.Lon = parts[0], parts[1]
+		job.Data.Locations = points
+	}
+
 	outpath := filepath.Join(w.cfg.DataFolder, job.ID+".csv")
 
 	outfile, err := os.Create(outpath)
