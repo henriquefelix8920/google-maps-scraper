@@ -3,6 +3,9 @@ package web
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -87,6 +90,7 @@ type JobData struct {
 	ExtraReviews bool          `json:"extra_reviews"`
 	MaxTime      time.Duration `json:"max_time"`
 	Proxies      []string      `json:"proxies"`
+	Locations    []string      `json:"locations,omitempty"`
 }
 
 func (d *JobData) Validate() error {
@@ -110,8 +114,46 @@ func (d *JobData) Validate() error {
 		return errors.New("missing max time")
 	}
 
-	if d.FastMode && (d.Lat == "" || d.Lon == "") {
-		return errors.New("missing geo coordinates")
+	if d.FastMode {
+		if d.Lat == "" || d.Lon == "" {
+			return errors.New("missing geo coordinates")
+		}
+		if err := validateCoordinatePair(d.Lat + "," + d.Lon); err != nil {
+			return fmt.Errorf("invalid primary geo coordinates: %w", err)
+		}
+	}
+
+	if len(d.Locations) > 20 {
+		return errors.New("a maximum of 20 additional search points is allowed")
+	}
+	for i, location := range d.Locations {
+		if err := validateCoordinatePair(location); err != nil {
+			return fmt.Errorf("invalid additional search point %d: %w", i+1, err)
+		}
+	}
+
+	return nil
+}
+
+func validateCoordinatePair(value string) error {
+	parts := strings.Split(strings.TrimSpace(value), ",")
+	if len(parts) != 2 {
+		return errors.New("use latitude,longitude")
+	}
+
+	lat, err := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
+	if err != nil {
+		return fmt.Errorf("invalid latitude: %w", err)
+	}
+	lon, err := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
+	if err != nil {
+		return fmt.Errorf("invalid longitude: %w", err)
+	}
+	if !(lat >= -90 && lat <= 90) {
+		return errors.New("latitude must be between -90 and 90")
+	}
+	if !(lon >= -180 && lon <= 180) {
+		return errors.New("longitude must be between -180 and 180")
 	}
 
 	return nil
