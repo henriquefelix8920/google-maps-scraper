@@ -91,6 +91,8 @@ type JobData struct {
 	MaxTime      time.Duration `json:"max_time"`
 	Proxies      []string      `json:"proxies"`
 	Locations    []string      `json:"locations,omitempty"`
+	City         string        `json:"city,omitempty"`
+	Coverage     string        `json:"coverage,omitempty"`
 }
 
 func (d *JobData) Validate() error {
@@ -114,12 +116,20 @@ func (d *JobData) Validate() error {
 		return errors.New("missing max time")
 	}
 
-	if d.FastMode {
+	if d.FastMode && strings.TrimSpace(d.City) == "" {
 		if d.Lat == "" || d.Lon == "" {
 			return errors.New("missing geo coordinates")
 		}
 		if err := validateCoordinatePair(d.Lat + "," + d.Lon); err != nil {
 			return fmt.Errorf("invalid primary geo coordinates: %w", err)
+		}
+	}
+
+	if strings.TrimSpace(d.City) != "" {
+		switch strings.ToLower(strings.TrimSpace(d.Coverage)) {
+		case "", "economical", "balanced", "complete":
+		default:
+			return errors.New("invalid city coverage: use economical, balanced, or complete")
 		}
 	}
 
