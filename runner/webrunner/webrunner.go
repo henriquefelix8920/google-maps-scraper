@@ -189,32 +189,45 @@ func (w *webrunner) scrapeJob(ctx context.Context, job *web.Job) error {
 	dedup := deduper.New()
 	exitMonitor := exiter.New()
 
-	seedJobs, err := runner.CreateSeedJobs(
-		job.Data.FastMode,
-		job.Data.Lang,
-		strings.NewReader(strings.Join(job.Data.Keywords, "\n")),
-		job.Data.Depth,
-		job.Data.Email,
-		coords,
-		job.Data.Zoom,
-		func() float64 {
-			if job.Data.Radius <= 0 {
-				return 10000 // 10 km
+	locations := make([]string, 0, 1+len(job.Data.Locations))
+	if coords != "" {
+		locations = append(locations, coords)
+	}
+	locations = append(locations, job.Data.Locations...)
+	if len(locations) == 0 {
+		// Preserve the original non-geographic detailed-mode behavior.
+		locations = append(locations, "")
+	}
+
+	var seedJobs []scrapemate.IJob
+	for _, location := range locations {
+		locationJobs, createErr := runner.CreateSeedJobs(
+			job.Data.FastMode,
+			job.Data.Lang,
+			strings.NewReader(strings.Join(job.Data.Keywords, "\n")),
+			job.Data.Depth,
+			job.Data.Email,
+			location,
+			job.Data.Zoom,
+			func() float64 {
+				if job.Data.Radius <= 0 {
+					return 10000 // 10 km
+				}
+
+				return float64(job.Data.Radius)
+			}(),
+			dedup,
+			exitMonitor,
+			w.cfg.ExtraReviews || job.Data.ExtraReviews,
+		)
+		if createErr != nil {
+			err2 := w.svc.Update(ctx, job)
+			if err2 != nil {
+				log.Printf("failed to update job status: %v", err2)
 			}
-
-			return float64(job.Data.Radius)
-		}(),
-		dedup,
-		exitMonitor,
-		w.cfg.ExtraReviews || job.Data.ExtraReviews,
-	)
-	if err != nil {
-		err2 := w.svc.Update(ctx, job)
-		if err2 != nil {
-			log.Printf("failed to update job status: %v", err2)
+			return createErr
 		}
-
-		return err
+		seedJobs = append(seedJobs, locationJobs...)
 	}
 
 	if len(seedJobs) > 0 {

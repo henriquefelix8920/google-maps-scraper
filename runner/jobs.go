@@ -168,6 +168,9 @@ func CreateSeedJobs(
 			}
 
 			opts := []gmaps.SearchJobOptions{gmaps.WithSearchJobDepth(maxDepth)}
+			if dedup != nil {
+				opts = append(opts, gmaps.WithSearchJobDeduper(dedup))
+			}
 
 			if exitMonitor != nil {
 				opts = append(opts, gmaps.WithSearchJobExitMonitor(exitMonitor))

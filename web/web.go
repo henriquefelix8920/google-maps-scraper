@@ -180,18 +180,19 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 type formData struct {
-	Name     string
-	MaxTime  string
-	Keywords []string
-	Language string
-	Zoom     int
-	FastMode bool
-	Radius   int
-	Lat      string
-	Lon      string
-	Depth    int
-	Email    bool
-	Proxies  []string
+	Name      string
+	MaxTime   string
+	Keywords  []string
+	Language  string
+	Zoom      int
+	FastMode  bool
+	Radius    int
+	Lat       string
+	Lon       string
+	Locations string
+	Depth     int
+	Email     bool
+	Proxies   []string
 }
 
 type ctxKey string
@@ -337,6 +338,12 @@ func (s *Server) scrape(w http.ResponseWriter, r *http.Request) {
 
 	newJob.Data.Lat = r.Form.Get("latitude")
 	newJob.Data.Lon = r.Form.Get("longitude")
+	for _, location := range strings.Split(r.Form.Get("locations"), "\n") {
+		location = strings.TrimSpace(location)
+		if location != "" {
+			newJob.Data.Locations = append(newJob.Data.Locations, location)
+		}
+	}
 
 	newJob.Data.Depth, err = strconv.Atoi(r.Form.Get("depth"))
 	if err != nil {

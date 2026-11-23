@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"uuid"
 
+	"github.com/gosom/google-maps-scraper/deduper"
 	"github.com/gosom/google-maps-scraper/exiter"
 	"github.com/gosom/scrapemate"
 )
@@ -40,6 +41,7 @@ type SearchJob struct {
 	seen                    map[string]struct{}
 	ExitMonitor             exiter.Exiter
 	WriterManagedCompletion bool
+	Deduper                 deduper.Deduper
 }
 
 func NewSearchJob(params *MapSearchParams, opts ...SearchJobOptions) *SearchJob {
@@ -79,6 +81,14 @@ func WithSearchJobExitMonitor(exitMonitor exiter.Exiter) SearchJobOptions {
 func WithSearchJobWriterManagedCompletion() SearchJobOptions {
 	return func(j *SearchJob) {
 		j.WriterManagedCompletion = true
+	}
+}
+
+// WithSearchJobDeduper removes businesses already returned by another search
+// point or keyword in the same scrape job.
+func WithSearchJobDeduper(d deduper.Deduper) SearchJobOptions {
+	return func(j *SearchJob) {
+		j.Deduper = d
 	}
 }
 
@@ -131,6 +141,16 @@ func (j *SearchJob) Process(ctx context.Context, resp *scrapemate.Response) (any
 	newCount := len(entries)
 	entries = filterAndSortEntriesWithinRadius(entries,
 		j.params.Location.Lat, j.params.Location.Lon, j.params.Location.Radius)
+
+	if j.Deduper != nil {
+		uniqueAcrossSearches := make([]*Entry, 0, len(entries))
+		for _, entry := range entries {
+			if j.Deduper.AddIfNotExists(ctx, searchEntryIdentity(entry)) {
+				uniqueAcrossSearches = append(uniqueAcrossSearches, entry)
+			}
+		}
+		entries = uniqueAcrossSearches
+	}
 
 	var next []scrapemate.IJob
 	if rawCount >= searchBatchSize && newCount > 0 && j.batch+1 < j.maxDepth {
