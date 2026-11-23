@@ -190,6 +190,8 @@ type formData struct {
 	Lat       string
 	Lon       string
 	Locations string
+	City      string
+	Coverage  string
 	Depth     int
 	Email     bool
 	Proxies   []string
@@ -251,6 +253,7 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 		Zoom:     15,
 		FastMode: false,
 		Radius:   10000,
+		Coverage: "balanced",
 		Lat:      "0",
 		Lon:      "0",
 		Depth:    10,
@@ -338,6 +341,11 @@ func (s *Server) scrape(w http.ResponseWriter, r *http.Request) {
 
 	newJob.Data.Lat = r.Form.Get("latitude")
 	newJob.Data.Lon = r.Form.Get("longitude")
+	newJob.Data.City = strings.TrimSpace(r.Form.Get("city"))
+	newJob.Data.Coverage = r.Form.Get("coverage")
+	if newJob.Data.Coverage == "" {
+		newJob.Data.Coverage = "balanced"
+	}
 	for _, location := range strings.Split(r.Form.Get("locations"), "\n") {
 		location = strings.TrimSpace(location)
 		if location != "" {

@@ -51,3 +51,24 @@ func TestJobDataValidateAdditionalLocations(t *testing.T) {
 		t.Fatal("invalid additional location was accepted")
 	}
 }
+
+func TestJobDataValidateCityCoverage(t *testing.T) {
+	data := JobData{
+		Keywords: []string{"dentists"},
+		Lang:     "pt",
+		Depth:    10,
+		MaxTime:  10,
+		FastMode: true,
+		City:     "Belo Horizonte, MG, Brazil",
+		Coverage: "balanced",
+	}
+
+	if err := data.Validate(); err != nil {
+		t.Fatalf("valid city-based fast-mode job was rejected: %v", err)
+	}
+
+	data.Coverage = "unlimited"
+	if err := data.Validate(); err == nil {
+		t.Fatal("invalid city coverage was accepted")
+	}
+}
