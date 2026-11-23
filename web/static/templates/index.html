@@ -84,7 +84,7 @@
                                     <option value="complete" {{if eq .Coverage "complete"}}selected{{end}}>Complete (up to 20 grid points)</option>
                                 </select>
                             </div>
-                            <p class="text-muted"><small>City mode uses the city's geocoded bounding rectangle as an approximate coverage area. The center point is also searched. Manual coordinates below are for advanced use; do not combine them with a city.</small></p>
+                            <p class="text-muted"><small>City mode uses the city's geocoded bounding rectangle as an approximate coverage area. The center point is also searched. Manual coordinates below are for advanced use; do not combine them with a city. Geocoding by <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>.</small></p>
                             <div class="form-group">
                                 <label for="zoom">Zoom:</label>
                                 <input type="number" id="zoom" name="zoom" value="{{.Zoom}}">
