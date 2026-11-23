@@ -180,19 +180,19 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 type formData struct {
-	Name     string
-	MaxTime  string
-	Keywords []string
-	Language string
-	Zoom     int
-	FastMode bool
-	Radius   int
-	Lat      string
-	Lon      string
+	Name      string
+	MaxTime   string
+	Keywords  []string
+	Language  string
+	Zoom      int
+	FastMode  bool
+	Radius    int
+	Lat       string
+	Lon       string
 	Locations string
-	Depth    int
-	Email    bool
-	Proxies  []string
+	Depth     int
+	Email     bool
+	Proxies   []string
 }
 
 type ctxKey string
