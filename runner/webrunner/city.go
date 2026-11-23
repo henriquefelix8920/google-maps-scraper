@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -16,12 +17,13 @@ import (
 const (
 	cityGeocoderURL = "https://nominatim.openstreetmap.org/search"
 	maxCityPoints   = 20
+	maxCitySpanKm   = 300
 )
 
 type geocodingResult struct {
-		Lat         string   `json:"lat"`
-		Lon         string   `json:"lon"`
-		BoundingBox []string `json:"boundingbox"`
+	Lat         string   `json:"lat"`
+	Lon         string   `json:"lon"`
+	BoundingBox []string `json:"boundingbox"`
 }
 
 // resolveCityPoints geocodes a city and creates a bounded grid of search points.
@@ -89,17 +91,28 @@ func resolveCityPoints(ctx context.Context, city, coverage string) (string, []st
 
 	// Nominatim order: south, north, west, east.
 	south, err := strconv.ParseFloat(result.BoundingBox[0], 64)
-	if err != nil { return "", nil, fmt.Errorf("invalid city bounding box: %w", err) }
+	if err != nil {
+		return "", nil, fmt.Errorf("invalid city bounding box: %w", err)
+	}
 	north, err := strconv.ParseFloat(result.BoundingBox[1], 64)
-	if err != nil { return "", nil, fmt.Errorf("invalid city bounding box: %w", err) }
+	if err != nil {
+		return "", nil, fmt.Errorf("invalid city bounding box: %w", err)
+	}
 	west, err := strconv.ParseFloat(result.BoundingBox[2], 64)
-	if err != nil { return "", nil, fmt.Errorf("invalid city bounding box: %w", err) }
+	if err != nil {
+		return "", nil, fmt.Errorf("invalid city bounding box: %w", err)
+	}
 	east, err := strconv.ParseFloat(result.BoundingBox[3], 64)
-	if err != nil { return "", nil, fmt.Errorf("invalid city bounding box: %w", err) }
+	if err != nil {
+		return "", nil, fmt.Errorf("invalid city bounding box: %w", err)
+	}
 
 	bbox := grid.BoundingBox{MinLat: south, MinLon: west, MaxLat: north, MaxLon: east}
 	if _, err := grid.ParseBoundingBox(fmt.Sprintf("%f,%f,%f,%f", south, west, north, east)); err != nil {
 		return "", nil, fmt.Errorf("invalid city boundary: %w", err)
+	}
+	if err := validateCityBounds(bbox); err != nil {
+		return "", nil, fmt.Errorf("could not use geocoding result for %q: %w", city, err)
 	}
 
 	// Increase cell size until the generated grid fits the selected point budget.
@@ -122,6 +135,24 @@ func resolveCityPoints(ctx context.Context, city, coverage string) (string, []st
 	}
 
 	return fmt.Sprintf("%f,%f", lat, lon), points, nil
+}
+
+// validateCityBounds prevents a country or state returned by an ambiguous
+// geocoding query from being treated as a city and sampled with only 5-20 points.
+func validateCityBounds(bbox grid.BoundingBox) error {
+	midLat := (bbox.MinLat + bbox.MaxLat) / 2
+	latSpanKm := (bbox.MaxLat - bbox.MinLat) * 111.32
+	lonSpanKm := (bbox.MaxLon - bbox.MinLon) * 111.32 * math.Abs(math.Cos(midLat*math.Pi/180))
+
+	if latSpanKm > maxCitySpanKm || lonSpanKm > maxCitySpanKm {
+		return fmt.Errorf(
+			"the matched area is approximately %.0f km north-south by %.0f km east-west; this is too large for city coverage. Enter the municipality, state, and country (for example, Iturama, MG, Brazil)",
+			latSpanKm,
+			lonSpanKm,
+		)
+	}
+
+	return nil
 }
 
 func coveragePointTarget(coverage string) (int, error) {
